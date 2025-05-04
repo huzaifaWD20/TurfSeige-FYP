@@ -1,7 +1,7 @@
 ﻿import pyodbc
 
 server = 'DESKTOP-3FUC3U8\\SQLEXPRESS03'  # or 'Your-PC-Name\\SQLEXPRESS' if you're using a named instance
-database = 'FYP'
+database = 'TurfSeige'
 driver = 'ODBC Driver 17 for SQL Server'
 
 connection_string = f'''
