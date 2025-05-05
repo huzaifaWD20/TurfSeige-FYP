@@ -82,9 +82,47 @@ const SignUp = ({ navigation }) => {
 
   // REMOVE: all Firebase imports and API functions like createUserWithEmailAndPassword, setDoc, etc.
 
-  const handleSignUp = () => {
-    Alert.alert("Disabled", "Sign-up is currently disabled.");
-  };
+    const handleSignUp = async () => {
+        // Basic validation
+        if (!name || !email || !password) {
+            alert("Error", "Please fill in all fields.");
+            return;
+        }
+
+        if (!validateEmail(email)) {
+            setEmailError("Invalid email format");
+            return;
+        } else {
+            setEmailError("");
+        }
+
+        try {
+            const response = await fetch('http://192.168.2.109:8000/api/signup/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name,
+                    email,
+                    password,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert("Success", "Account created successfully!");
+                navigation.navigate('Login'); // or your login screen
+            } else {
+                alert("Error", data.error || "Failed to sign up");
+            }
+        } catch (error) {
+            console.error("Signup error:", error);
+            alert("Error", "Network error. Please try again.");
+        }
+    };
+
 
 
   const translateX = tabAnimation.interpolate({

@@ -42,52 +42,104 @@ const Login = ({ navigation }) => {
     inputRange: [0, 1],
     outputRange: [0, width * 0.5],
   })
+    const handleLogin = async () => {
+        setIsLoading(true)
 
-  const handleLogin = () => {
-    setIsLoading(true)
+        if (activeTab === "email") {
+            if (!email || !password) {
+                Alert.alert("Error", "Please enter both email and password")
+                setIsLoading(false)
+                return
+            }
 
-    if (activeTab === "email") {
-      if (!email || !password) {
-        Alert.alert("Error", "Please enter both email and password")
-        setIsLoading(false)
-        return
-      }
+            try {
+                const response = await fetch("http://192.168.2.109:8000/api/login/", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        email,
+                        password,
+                    }),
+                })
 
-      // Hardcoded credentials check
-      if (email === "admin@example.com" && password === "admin") {
-        // Admin user (team captain)
-        setUser({
-          id: "1",
-          name: "John Doe",
-          avatar: "https://via.placeholder.com/100",
-          playerID: "PLAYER001",
-        })
-        setIsLoading(false)
-        navigation.replace("Main")
-      } else if (email === "user@example.com" && password === "user") {
-        // Regular user
-        setUser({
-          id: "2",
-          name: "Jane Smith",
-          avatar: "https://via.placeholder.com/100",
-          playerID: "PLAYER002",
-        })
-        setIsLoading(false)
-        navigation.replace("Main")
-      } else {
-        setIsLoading(false)
-        Alert.alert("Login Failed", "Invalid credentials")
-      }
-    } else {
-      if (!phone || phone.length < 9) {
-        Alert.alert("Error", "Please enter a valid phone number")
-        setIsLoading(false)
-        return
-      }
-      setIsLoading(false)
-      Alert.alert("Info", "Phone login not implemented yet")
+                const data = await response.json()
+
+                if (response.ok) {
+                    setUser({
+                        id: data._id,
+                        name: data.name,
+                        avatar: data.avatar || "https://via.placeholder.com/100",
+                        playerID: data.playerID || "PLAYERXXX",
+                    })
+                    setIsLoading(false)
+                    navigation.replace("Main")
+                } else {
+                    Alert.alert("Login Failed", data.message || "Invalid credentials")
+                    setIsLoading(false)
+                }
+            } catch (error) {
+                Alert.alert("Error", "Something went wrong. Please try again.")
+                console.error("Login error:", error)
+                setIsLoading(false)
+            }
+        } else {
+            if (!phone || phone.length < 9) {
+                Alert.alert("Error", "Please enter a valid phone number")
+                setIsLoading(false)
+                return
+            }
+            Alert.alert("Info", "Phone login not implemented yet")
+            setIsLoading(false)
+        }
     }
-  }
+
+  //const handleLogin = () => {
+  //  setIsLoading(true)
+
+  //  if (activeTab === "email") {
+  //    if (!email || !password) {
+  //      Alert.alert("Error", "Please enter both email and password")
+  //      setIsLoading(false)
+  //      return
+  //    }
+
+  //    // Hardcoded credentials check
+  //    if (email === "admin@example.com" && password === "admin") {
+  //      // Admin user (team captain)
+  //      setUser({
+  //        id: "1",
+  //        name: "John Doe",
+  //        avatar: "https://via.placeholder.com/100",
+  //        playerID: "PLAYER001",
+  //      })
+  //      setIsLoading(false)
+  //      navigation.replace("Main")
+  //    } else if (email === "user@example.com" && password === "user") {
+  //      // Regular user
+  //      setUser({
+  //        id: "2",
+  //        name: "Jane Smith",
+  //        avatar: "https://via.placeholder.com/100",
+  //        playerID: "PLAYER002",
+  //      })
+  //      setIsLoading(false)
+  //      navigation.replace("Main")
+  //    } else {
+  //      setIsLoading(false)
+  //      Alert.alert("Login Failed", "Invalid credentials")
+  //    }
+  //  } else {
+  //    if (!phone || phone.length < 9) {
+  //      Alert.alert("Error", "Please enter a valid phone number")
+  //      setIsLoading(false)
+  //      return
+  //    }
+  //    setIsLoading(false)
+  //    Alert.alert("Info", "Phone login not implemented yet")
+  //  }
+  //}
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
