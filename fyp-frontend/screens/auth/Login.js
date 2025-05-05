@@ -16,6 +16,8 @@ import {
 } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import { useTeam } from "../../context/TeamContext"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+
 
 const { width } = Dimensions.get("window")
 
@@ -47,7 +49,7 @@ const Login = ({ navigation }) => {
 
         if (activeTab === "email") {
             if (!email || !password) {
-                Alert.alert("Error", "Please enter both email and password")
+                alert("Error", "Please enter both email and password")
                 setIsLoading(false)
                 return
             }
@@ -67,30 +69,28 @@ const Login = ({ navigation }) => {
                 const data = await response.json()
 
                 if (response.ok) {
-                    setUser({
-                        id: data._id,
-                        name: data.name,
-                        avatar: data.avatar || "https://via.placeholder.com/100",
-                        playerID: data.playerID || "PLAYERXXX",
-                    })
+                    // Store tokens
+                    await AsyncStorage.setItem("accessToken", data.access)
+                    await AsyncStorage.setItem("refreshToken", data.refresh)
+
                     setIsLoading(false)
                     navigation.replace("Main")
                 } else {
-                    Alert.alert("Login Failed", data.message || "Invalid credentials")
+                    alert("Login Failed", data.detail || "Invalid credentials")
                     setIsLoading(false)
                 }
             } catch (error) {
-                Alert.alert("Error", "Something went wrong. Please try again.")
+                alert("Error", "Something went wrong. Please try again.")
                 console.error("Login error:", error)
                 setIsLoading(false)
             }
         } else {
             if (!phone || phone.length < 9) {
-                Alert.alert("Error", "Please enter a valid phone number")
+                alert("Error", "Please enter a valid phone number")
                 setIsLoading(false)
                 return
             }
-            Alert.alert("Info", "Phone login not implemented yet")
+            alert("Info", "Phone login not implemented yet")
             setIsLoading(false)
         }
     }

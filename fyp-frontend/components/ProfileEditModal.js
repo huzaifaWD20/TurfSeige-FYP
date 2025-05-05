@@ -1,190 +1,203 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, View, Text, TextInput, Button, StyleSheet, TouchableOpacity } from 'react-native';
+import { Modal, View, Text, TextInput, StyleSheet, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 
-const ProfileEditModal = ({ isVisible, onClose, profileData, setProfileData }) => {
-  const [formData, setFormData] = useState({
-    name: profileData?.name || '',
-    email: profileData?.email || '',
-    nationality: profileData?.nationality || '',
-    club: profileData?.club || 'None',
-    skillLevel: profileData?.skillLevel || 'Beginner',
-    age: profileData?.age || '',
-    PAC: profileData?.PAC || 50,
-    SHO: profileData?.SHO || 45,
-    PAS: profileData?.PAS || 50,
-    DRI: profileData?.DRI || 48,
-    DEF: profileData?.DEF || 55,
-    PHY: profileData?.PHY || 50,
-    Individual_Rating: profileData?.Individual_Rating || 50,
-    position: profileData?.position || 'Defender', // Added default position
-  });
+const { width, height } = Dimensions.get('window');
 
-  useEffect(() => {
-    if (profileData) {
-      setFormData({
-        ...profileData,
-      });
-    }
-  }, [profileData]);
+const ProfileEditModal = ({ isVisible, onClose, profileData, onSubmit }) => {
+    const [formData, setFormData] = useState({});
 
-  const getDefaultStats = (skillLevel, position) => {
-    const statsBySkill = {
-      Beginner: { PAC: 50, SHO: 45, PAS: 50, DRI: 48, DEF: 55, PHY: 50 },
-      Intermediate: { PAC: 60, SHO: 55, PAS: 60, DRI: 58, DEF: 65, PHY: 60 },
-      Advanced: { PAC: 70, SHO: 65, PAS: 70, DRI: 68, DEF: 75, PHY: 70 },
-      Professional: { PAC: 80, SHO: 75, PAS: 80, DRI: 78, DEF: 85, PHY: 80 },
+    useEffect(() => {
+        if (profileData) {
+            setFormData({
+                ...profileData,
+                age: profileData.age?.toString() || '',
+            });
+        }
+    }, [profileData]);
+
+    const getDefaultStats = (skill_level, position) => {
+        const statsBySkill = {
+            Beginner: { PAC: 50, SHO: 45, PAS: 50, DRI: 48, DEF: 55, PHY: 50 },
+            Intermediate: { PAC: 60, SHO: 55, PAS: 60, DRI: 58, DEF: 65, PHY: 60 },
+            Advanced: { PAC: 70, SHO: 65, PAS: 70, DRI: 68, DEF: 75, PHY: 70 },
+            Professional: { PAC: 80, SHO: 75, PAS: 80, DRI: 78, DEF: 85, PHY: 80 },
+        };
+
+        let stats = { ...statsBySkill[skill_level] || statsBySkill["Beginner"] };
+
+        const positionBoost = {
+            Defender: { DEF: 5, PHY: 3 },
+            Attacker: { SHO: 5, PAC: 4 },
+            Goalkeeper: { DEF: 6, PAS: 3 }
+        };
+
+        if (positionBoost[position]) {
+            Object.keys(positionBoost[position]).forEach(stat => {
+                stats[stat] += positionBoost[position][stat];
+            });
+        }
+
+        return stats;
     };
 
-    let stats = { ...statsBySkill[skillLevel] || statsBySkill["Beginner"] };
+    const handleSkillLevelChange = (skill_level) => {
+        const stats = getDefaultStats(skill_level, formData.position);
+        const Individual_Rating = (
+            (stats.PAC + stats.SHO + stats.PAS + stats.DRI + stats.DEF + stats.PHY) / 6
+        ).toFixed(2);
 
-    const positionBoost = {
-      Defender: { DEF: 5, PHY: 3 },
-      Attacker: { SHO: 5, PAC: 4 },
-      Goalkeeper: { DEF: 6, PAS: 3 }
+        setFormData(prev => ({
+            ...prev,
+            skill_level,
+            ...stats,
+            Individual_Rating: parseFloat(Individual_Rating),
+        }));
     };
 
-    if (positionBoost[position]) {
-      Object.keys(positionBoost[position]).forEach(stat => {
-        stats[stat] += positionBoost[position][stat];
-      });
-    }
+    const handlePositionChange = (position) => {
+        const stats = getDefaultStats(formData.skill_level, position);
+        const Individual_Rating = (
+            (stats.PAC + stats.SHO + stats.PAS + stats.DRI + stats.DEF + stats.PHY) / 6
+        ).toFixed(2);
 
-    return stats;
-  };
+        setFormData(prev => ({
+            ...prev,
+            position,
+            ...stats,
+            Individual_Rating: parseFloat(Individual_Rating),
+        }));
+    };
 
-  const handleSkillLevelChange = (newSkillLevel) => {
-    const stats = getDefaultStats(newSkillLevel, formData.position);
-    const individualRating = (
-      (stats.PAC + stats.SHO + stats.PAS + stats.DRI + stats.DEF + stats.PHY) / 6
-    ).toFixed(2);
+    const handleSave = () => {
+        onSubmit({
+            ...formData,
+            age: parseInt(formData.age),
+        });
+        onClose();
+    };
 
-    setFormData({
-      ...formData,
-      skillLevel: newSkillLevel,
-      ...stats,
-      Individual_Rating: parseFloat(individualRating),
-    });
-  };
+    return (
+        <Modal visible={isVisible} animationType="slide" transparent={true}>
+            <View style={styles.modalContainer}>
+                <View style={styles.modalContent}>
+                    <ScrollView>
+                        <Text style={styles.modalTitle}>Edit Profile</Text>
 
-  const handlePositionChange = (newPosition) => {
-    const stats = getDefaultStats(formData.skillLevel, newPosition);
-    const individualRating = (
-      (stats.PAC + stats.SHO + stats.PAS + stats.DRI + stats.DEF + stats.PHY) / 6
-    ).toFixed(2);
+                        <Text style={styles.label}>Name</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Name"
+                            value={formData.name}
+                            onChangeText={text => setFormData({ ...formData, name: text })}
+                        />
 
-    setFormData({
-      ...formData,
-      position: newPosition,
-      ...stats,
-      Individual_Rating: parseFloat(individualRating),
-    });
-  };
+                        <Text style={styles.label}>Age</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Age"
+                            keyboardType="numeric"
+                            value={formData.age}
+                            onChangeText={text => setFormData({ ...formData, age: text })}
+                        />
 
-  const handleSave = () => {
-    setProfileData(formData); // Update the profile data in the parent screen
-    onClose();
-    alert("Profile updated!");
-  };
+                        <Text style={styles.label}>Nationality</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Nationality"
+                            value={formData.nationality}
+                            onChangeText={text => setFormData({ ...formData, nationality: text })}
+                        />
 
-  return (
-    <Modal visible={isVisible} animationType="slide" onRequestClose={onClose} transparent={true}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>X</Text>
-          </TouchableOpacity>
-          <Text style={styles.label}>Age:</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.age.toString()}
-            editable={false} // Disabled input
-          />
-          <Text style={styles.label}>Skill Level:</Text>
-          <Picker selectedValue={formData.skillLevel} onValueChange={handleSkillLevelChange} style={styles.picker} enabled={false}>
-            <Picker.Item label="Beginner" value="Beginner" />
-            <Picker.Item label="Intermediate" value="Intermediate" />
-            <Picker.Item label="Advanced" value="Advanced" />
-            <Picker.Item label="Professional" value="Professional" />
-          </Picker>
+                        <Text style={styles.label}>Club</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Club"
+                            value={formData.club}
+                            onChangeText={text => setFormData({ ...formData, club: text })}
+                        />
 
-          <Text style={styles.label}>Nationality:</Text>
-          <TextInput style={styles.input} value={formData.nationality} editable={false} />
+                        <Text style={styles.label}>Skill Level</Text>
+                        <Picker selectedValue={formData.skill_level} onValueChange={handleSkillLevelChange}>
+                            <Picker.Item label="Beginner" value="Beginner" />
+                            <Picker.Item label="Intermediate" value="Intermediate" />
+                            <Picker.Item label="Advanced" value="Advanced" />
+                            <Picker.Item label="Professional" value="Professional" />
+                        </Picker>
 
-          <Text style={styles.label}>Club:</Text>
-          <TextInput style={styles.input} value={formData.club} editable={false} />
+                        <Text style={styles.label}>Position</Text>
+                        <Picker selectedValue={formData.position} onValueChange={handlePositionChange}>
+                            <Picker.Item label="Defender" value="Defender" />
+                            <Picker.Item label="Attacker" value="Attacker" />
+                            <Picker.Item label="Goalkeeper" value="Goalkeeper" />
+                        </Picker>
 
-          <Text style={styles.label}>Position:</Text>
-          <Picker selectedValue={formData.position} onValueChange={handlePositionChange} style={styles.picker} enabled={false}>
-            <Picker.Item label="Defender" value="Defender" />
-            <Picker.Item label="Attacker" value="Attacker" />
-            <Picker.Item label="Goalkeeper" value="Goalkeeper" />
-          </Picker>
+                        <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
+                            <Text style={styles.saveButtonText}>Save</Text>
+                        </TouchableOpacity>
 
-          <Text style={styles.label}>Individual Rating: {formData.Individual_Rating}</Text>
-
-          <Button title="Save Changes" onPress={handleSave} color="#007BFF" />
-        </View>
-      </View>
-    </Modal>
-  );
+                        <TouchableOpacity onPress={onClose} style={styles.cancelButton}>
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </ScrollView>
+                </View>
+            </View>
+        </Modal>
+    );
 };
 
 const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContainer: {
-    backgroundColor: 'white',
-    padding: 20,
-    width: '90%',
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  closeButton: {
-    alignSelf: 'flex-end',
-    padding: 10,
-    backgroundColor: '#E8E8E8',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  closeButtonText: {
-    color: '#000',
-    fontSize: 16,
-  },
-  label: {
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  input: {
-    height: 40,
-    borderColor: '#ccc',
-    borderWidth: 1,
-    marginBottom: 15,
-    paddingHorizontal: 10,
-    borderRadius: 5,
-    color: '#888', // Indicate disabled state
-    backgroundColor: '#f4f4f4', // Indicate disabled state
-  },
-  picker: {
-    marginBottom: 15,
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    color: '#888', // Indicate disabled state
-    backgroundColor: '#f4f4f4', // Indicate disabled state
-  },
+    modalContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    modalContent: {
+        width: width * 0.9,
+        maxHeight: height * 0.85,
+        alignSelf: 'center',
+        backgroundColor: 'white',
+        borderRadius: 10,
+        padding: 20,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 10,
+        textAlign: 'center',
+    },
+    input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        padding: 10,
+        borderRadius: 8,
+        marginBottom: 10,
+    },
+    label: {
+        fontWeight: 'bold',
+        marginBottom: 5,
+    },
+    saveButton: {
+        backgroundColor: '#007BFF', // blue color
+        padding: 12,
+        borderRadius: 8,
+        marginTop: 15,
+    },
+    saveButtonText: {
+        color: 'white',
+        textAlign: 'center',
+        fontWeight: 'bold',
+    },
+    cancelButton: {
+        marginTop: 10,
+        padding: 12,
+        backgroundColor: '#ccc',
+        borderRadius: 8,
+    },
+    cancelButtonText: {
+        textAlign: 'center',
+        color: '#333',
+    },
 });
 
 export default ProfileEditModal;
