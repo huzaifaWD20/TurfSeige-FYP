@@ -43,7 +43,7 @@ const ProfileScreen = () => {
                 return;
             }
 
-            const response = await fetch('http://192.168.2.109:8000/api/profile/', {
+            const response = await fetch('http://192.168.20.188:8000/api/profile/', {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -84,7 +84,7 @@ const ProfileScreen = () => {
                         return;
                     }
 
-                    const response = await fetch('http://192.168.2.109:8000/api/profile/', {
+                    const response = await fetch('http://192.168.20.188:8000/api/profile/', {
                         method: 'GET',
                         headers: {
                             'Content-Type': 'application/json',

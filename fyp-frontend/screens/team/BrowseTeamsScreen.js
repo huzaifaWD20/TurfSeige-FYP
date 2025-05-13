@@ -3,26 +3,62 @@
 import { useState, useEffect } from "react"
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, SafeAreaView, TextInput } from "react-native"
 import { ChevronLeft, Search, Users, X } from "lucide-react-native"
-import { useTeam } from "../../context/TeamContext"
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
-const BrowseTeamsScreen = ({ navigation }) => {
-  const { teams } = useTeam()
+const BrowseTeamsScreen = ({ navigation, route }) => {
   const [searchQuery, setSearchQuery] = useState("")
   const [filteredTeams, setFilteredTeams] = useState([])
+  const { teamId, teamName } = route.params;
 
-  useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setFilteredTeams(teams)
-    } else {
-      const filtered = teams.filter((team) => team.name.toLowerCase().includes(searchQuery.toLowerCase()))
-      setFilteredTeams(filtered)
-    }
-  }, [searchQuery, teams])
+    useEffect(() => {
+        console.log("Received Team ID:", teamId);
+        console.log("Received Team Name:", teamName);
+    }, []);
+
+    useEffect(() => {
+        const fetchPublicTeams = async () => {
+            try {
+                const token = await AsyncStorage.getItem('accessToken')
+
+                if (!token) {
+                    console.warn("No access token found")
+                    return
+                }
+
+                const queryParam = searchQuery.trim() ? `?search=${encodeURIComponent(searchQuery)}` : ""
+                const response = await fetch(`http://192.168.20.188:8000/api/teams/public/${queryParam}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                })
+
+                if (!response.ok) {
+                    console.warn("Failed to fetch public teams")
+                    return
+                }
+
+                const data = await response.json()
+                setFilteredTeams(data)
+            } catch (error) {
+                console.error("Error fetching public teams:", error)
+            }
+        }
+
+        fetchPublicTeams()
+    }, [searchQuery])
+
 
   const renderTeamItem = ({ item }) => (
     <TouchableOpacity
       style={styles.teamCard}
-      onPress={() => navigation.navigate("TeamMembersScreen", { teamId: item.id })}
+          onPress={() => navigation.navigate("TeamMembersScreen", {
+              opponentTeamId: item.id,
+              opponentTeamName: item.name,
+              requestingTeamId: teamId,
+              requestingTeamName: teamName,
+          })}
     >
       <Image source={{ uri: item.logo }} style={styles.teamLogo} />
       <View style={styles.teamInfo}>

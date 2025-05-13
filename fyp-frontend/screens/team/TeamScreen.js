@@ -1,311 +1,334 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  SafeAreaView,
-  FlatList,
-  ScrollView,
-  Modal,
-  TextInput,
-  Alert,
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    Image,
+    SafeAreaView,
+    FlatList,
+    ScrollView,
+    Modal,
+    TextInput,
+    Alert,
 } from "react-native"
 import { ChevronLeft, Plus, Users, Search, Calendar, MapPin } from "lucide-react-native"
-import { useTeam } from "../../context/TeamContext"
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const TeamScreen = ({ navigation }) => {
-  const { getUserTeams, isUserInTeam, getUserTeamInvitations, respondToTeamInvitation, currentUser } = useTeam()
+    const [teams, setTeams] = useState([])
+    const [showInviteModal, setShowInviteModal] = useState(false)
+    const [invitePlayerID, setInvitePlayerID] = useState("")
+    const [selectedTeam, setSelectedTeam] = useState(null)
 
-  const [teams, setTeams] = useState([])
-  const [teamInvitations, setTeamInvitations] = useState([])
-  const [showInviteModal, setShowInviteModal] = useState(false)
-  const [invitePlayerID, setInvitePlayerID] = useState("")
-  const [selectedTeam, setSelectedTeam] = useState(null)
-  const [showInvitationModal, setShowInvitationModal] = useState(false)
-  const [selectedInvitation, setSelectedInvitation] = useState(null)
 
-  useEffect(() => {
-    // Get user's teams
-    const userTeams = getUserTeams()
-    setTeams(userTeams)
 
-    // Get team invitations
-    const invitations = getUserTeamInvitations()
-    setTeamInvitations(invitations)
+    useEffect(() => {
+        const fetchTeamStatus = async () => {
+            try {
+                const token = await AsyncStorage.getItem('accessToken')
+                if (!token) {
+                    console.warn('No JWT token found')
+                    return
+                }
 
-    // Show invitation modal if there are pending invitations
-    if (invitations.length > 0 && !showInvitationModal) {
-      setSelectedInvitation(invitations[0])
-      setShowInvitationModal(true)
+                const response = await fetch('http://192.168.20.188:8000/api/teams/check-status/', {
+                    method: 'GET',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                })
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`)
+                }
+
+                const data = await response.json()
+                console.log('Team status response:', data.team.id)
+
+                if (data.status === 'captain' || data.status === 'member') {
+                    setTeams([data.team])
+                } else if (data.status === 'no_team') {
+                    setTeams([])
+                }
+            } catch (error) {
+                console.error('Error fetching team status:', error)
+            }
+        }
+
+        fetchTeamStatus()
+    }, [])
+
+    const handleInvitePlayer = async () => {
+        if (!invitePlayerID.trim() || !selectedTeam) {
+            alert("Error", "Please enter a valid Player ID")
+            return
+        }
+
+        console.log("Inviting player:", invitePlayerID, "to team:", selectedTeam.id) // ✅ CONSOLE LOG HERE
+
+        try {
+            const token = await AsyncStorage.getItem('accessToken')
+            const response = await fetch(`http://192.168.20.188:8000/api/teams/${selectedTeam.id}/invite/`, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ user_id: invitePlayerID }),
+            })
+
+            const result = await response.json()
+
+            if (!response.ok) {
+                alert("Error", result.message || "Failed to send invitation")
+                return
+            }
+
+            alert("Success", `Invitation sent to player ${invitePlayerID}`)
+        } catch (error) {
+            console.error("Invite error:", error)
+            alert("Error", "Something went wrong. Try again.")
+        } finally {
+            setInvitePlayerID("")
+            setShowInviteModal(false)
+        }
     }
-  }, [])
 
-  const handleInvitePlayer = () => {
-    if (!invitePlayerID.trim() || !selectedTeam) {
-      Alert.alert("Error", "Please enter a valid Player ID")
-      return
+
+    const renderTeamItem = ({ item }) => (
+        <TouchableOpacity
+            style={styles.teamCard}
+            onPress={() => navigation.navigate("TeamDetailsScreen", { teamId: item.id })}
+        >
+            <Image source={{ uri: item.logo }} style={styles.teamLogo} />
+            <View style={styles.teamInfo}>
+                <Text style={styles.teamName}>{item.name}</Text>
+                <View style={styles.statsRow}>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{item.matches_played}</Text>
+                        <Text style={styles.statLabel}>Played</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{item.wins}</Text>
+                        <Text style={styles.statLabel}>Won</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{item.draws}</Text>
+                        <Text style={styles.statLabel}>Draw</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{item.losses}</Text>
+                        <Text style={styles.statLabel}>Lost</Text>
+                    </View>
+                </View>
+            </View>
+        </TouchableOpacity>
+    )
+
+    const renderMatchItem = ({ item }) => {
+        const resultColor = item.result === "win" ? "#28A745" : item.result === "loss" ? "#DC3545" : "#FFC107"
+        return (
+            <View style={styles.matchItem}>
+                <View style={[styles.resultIndicator, { backgroundColor: resultColor }]} />
+                <View style={styles.matchInfo}>
+                    <Text style={styles.matchOpponent}>vs {item.opponent}</Text>
+                    <Text style={styles.matchScore}>{item.score}</Text>
+                    <View style={styles.matchMeta}>
+                        <View style={styles.metaItem}>
+                            <Calendar color="#666666" size={14} />
+                            <Text style={styles.metaText}>
+                                {new Date(item.date).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                })}
+                            </Text>
+                        </View>
+                        <View style={styles.metaItem}>
+                            <MapPin color="#666666" size={14} />
+                            <Text style={styles.metaText}>{item.location}</Text>
+                        </View>
+                    </View>
+                </View>
+            </View>
+        )
     }
-
-    // In a real app, this would send an invitation to the player
-    Alert.alert("Success", `Invitation sent to player ${invitePlayerID}`)
-    setInvitePlayerID("")
-    setShowInviteModal(false)
-  }
-
-  const handleRespondToInvitation = (response) => {
-    if (!selectedInvitation) return
-
-    respondToTeamInvitation(selectedInvitation.id, response)
-
-    // Update local state
-    setTeamInvitations(teamInvitations.filter((inv) => inv.id !== selectedInvitation.id))
-    setSelectedInvitation(null)
-    setShowInvitationModal(false)
-
-    // Refresh teams if accepted
-    if (response === "accepted") {
-      setTeams(getUserTeams())
-    }
-  }
-
-  const renderTeamItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.teamCard}
-      onPress={() => navigation.navigate("TeamDetailsScreen", { teamId: item.id })}
-    >
-      <Image source={{ uri: item.logo }} style={styles.teamLogo} />
-      <View style={styles.teamInfo}>
-        <Text style={styles.teamName}>{item.name}</Text>
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{item.stats.played}</Text>
-            <Text style={styles.statLabel}>Played</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{item.stats.won}</Text>
-            <Text style={styles.statLabel}>Won</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{item.stats.draw}</Text>
-            <Text style={styles.statLabel}>Draw</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{item.stats.lost}</Text>
-            <Text style={styles.statLabel}>Lost</Text>
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  )
-
-  const renderMatchItem = ({ item }) => {
-    const resultColor = item.result === "win" ? "#28A745" : item.result === "loss" ? "#DC3545" : "#FFC107"
 
     return (
-      <View style={styles.matchItem}>
-        <View style={[styles.resultIndicator, { backgroundColor: resultColor }]} />
-        <View style={styles.matchInfo}>
-          <Text style={styles.matchOpponent}>vs {item.opponent}</Text>
-          <Text style={styles.matchScore}>{item.score}</Text>
-          <View style={styles.matchMeta}>
-            <View style={styles.metaItem}>
-              <Calendar color="#666666" size={14} />
-              <Text style={styles.metaText}>
-                {new Date(item.date).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </Text>
-            </View>
-            <View style={styles.metaItem}>
-              <MapPin color="#666666" size={14} />
-              <Text style={styles.metaText}>{item.location}</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-    )
-  }
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <ChevronLeft color="#007BFF" size={24} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Teams</Text>
-        <View style={styles.placeholderView} />
-      </View>
-
-      {teams.length > 0 ? (
-        <ScrollView style={styles.content}>
-          <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate("BrowseTeamsScreen")}>
-              <Search color="#007BFF" size={20} />
-              <Text style={styles.actionButtonText}>Browse Teams</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate("MatchRequestsScreen")}>
-              <Calendar color="#007BFF" size={20} />
-              <Text style={styles.actionButtonText}>Match Requests</Text>
-            </TouchableOpacity>
-          </View>
-
-          <FlatList
-            data={teams}
-            renderItem={renderTeamItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.teamList}
-            scrollEnabled={false}
-          />
-
-          {teams.length > 0 && teams[0].matchHistory.length > 0 && (
-            <View style={styles.matchHistorySection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Recent Matches</Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    navigation.navigate("TeamDetailsScreen", { teamId: teams[0].id, initialTab: "matches" })
-                  }
-                >
-                  <Text style={styles.seeAllText}>See All</Text>
+        <SafeAreaView style={styles.container}>
+            <View style={styles.header}>
+                <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+                    <ChevronLeft color="#007BFF" size={24} />
                 </TouchableOpacity>
-              </View>
-              <FlatList
-                data={teams[0].matchHistory.slice(0, 3)}
-                renderItem={renderMatchItem}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-              />
+                <Text style={styles.headerTitle}>My Teams</Text>
+                <View style={styles.placeholderView} />
             </View>
-          )}
 
-          {teams.map((team) => (
-            <View key={team.id} style={styles.teamActions}>
-              <TouchableOpacity
-                style={styles.inviteButton}
-                onPress={() => {
-                  setSelectedTeam(team)
-                  setShowInviteModal(true)
-                }}
-              >
-                <Users color="#FFFFFF" size={20} />
-                <Text style={styles.inviteButtonText}>Invite Players</Text>
-              </TouchableOpacity>
+            {teams.length > 0 ? (
+                <ScrollView style={styles.content}>
+                    <View style={styles.actionButtons}>
+                        <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() =>
+                                navigation.navigate("BrowseTeamsScreen", {
+                                    teamId: teams[0]?.id,
+                                    teamName: teams[0]?.name,
+                                })
+                            }
+                        >
+                            <Search color="#007BFF" size={20} />
+                            <Text style={styles.actionButtonText}>Browse Teams</Text>
+                        </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.postMatchButton}
-                onPress={() => navigation.navigate("PostMatchScreen", { teamId: team.id })}
-              >
-                <Calendar color="#FFFFFF" size={20} />
-                <Text style={styles.postMatchButtonText}>Post Match</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </ScrollView>
-      ) : (
-        <View style={styles.emptyState}>
-          <Image source={{ uri: "https://via.placeholder.com/200" }} style={styles.emptyStateImage} />
-          <Text style={styles.emptyStateTitle}>No Teams Yet</Text>
-          <Text style={styles.emptyStateText}>Create a team to start playing with friends</Text>
+                        <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate("MatchRequestsScreen")}>
+                            <Calendar color="#007BFF" size={20} />
+                            <Text style={styles.actionButtonText}>Match Requests</Text>
+                        </TouchableOpacity>
+                    </View>
 
-          <TouchableOpacity style={styles.createButton} onPress={() => navigation.navigate("CreateTeamScreen")}>
-            <Plus color="#FFFFFF" size={20} />
-            <Text style={styles.createButtonText}>Create Team</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+                    <FlatList
+                        data={teams}
+                        renderItem={renderTeamItem}
+                        keyExtractor={(item) => item.id}
+                        contentContainerStyle={styles.teamList}
+                        scrollEnabled={false}
+                    />
 
-      {/* Invite Player Modal */}
-      <Modal
-        visible={showInviteModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowInviteModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Invite Player</Text>
-            <Text style={styles.modalSubtitle}>
-              Enter the Player ID of the person you want to invite to {selectedTeam?.name}
-            </Text>
+                    {teams.length > 0 && Array.isArray(teams[0].matchHistory) && teams[0].matchHistory.length > 0 && (
+                        <View style={styles.matchHistorySection}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>Recent Matches</Text>
+                                <TouchableOpacity
+                                    onPress={() =>
+                                        navigation.navigate("TeamDetailsScreen", { teamId: teams[0].id, initialTab: "matches" })
+                                    }
+                                >
+                                    <Text style={styles.seeAllText}>See All</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <FlatList
+                                data={teams[0].matchHistory.slice(0, 3)}
+                                renderItem={renderMatchItem}
+                                keyExtractor={(item) => item.id}
+                                scrollEnabled={false}
+                            />
+                        </View>
+                    )}
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Player ID (e.g., PLAYER123)"
-              value={invitePlayerID}
-              onChangeText={setInvitePlayerID}
-              autoCapitalize="characters"
-            />
+                    {teams.map((team) => (
+                        <View key={team.id} style={styles.teamActions}>
+                            <TouchableOpacity
+                                style={styles.inviteButton}
+                                onPress={() => {
+                                    setSelectedTeam(team)
+                                    setShowInviteModal(true)
+                                }}
+                            >
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => {
-                  setInvitePlayerID("")
-                  setShowInviteModal(false)
-                }}
-              >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.modalConfirmButton} onPress={handleInvitePlayer}>
-                <Text style={styles.modalConfirmButtonText}>Send Invite</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Team Invitation Modal */}
-      <Modal
-        visible={showInvitationModal && selectedInvitation !== null}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowInvitationModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Team Invitation</Text>
-
-            {selectedInvitation && (
-              <>
-                <View style={styles.invitationDetails}>
-                  <Image source={{ uri: "https://via.placeholder.com/100" }} style={styles.invitationTeamLogo} />
-                  <Text style={styles.invitationTeamName}>{selectedInvitation.teamName}</Text>
-                  <Text style={styles.invitationText}>has invited you to join their team!</Text>
+                                <Users color="#FFFFFF" size={20} />
+                                <Text style={styles.inviteButtonText}>Invite Players</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.postMatchButton}
+                                onPress={() => navigation.navigate("PostMatchScreen", { teamId: team.id })}
+                            >
+                                <Calendar color="#FFFFFF" size={20} />
+                                <Text style={styles.postMatchButtonText}>Post Match</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ))}
+                </ScrollView>
+            ) : (
+                <View style={styles.emptyState}>
+                    <Image source={{ uri: "https://via.placeholder.com/200" }} style={styles.emptyStateImage} />
+                    <Text style={styles.emptyStateTitle}>No Teams Yet</Text>
+                    <Text style={styles.emptyStateText}>Create a team to start playing with friends</Text>
+                    <TouchableOpacity style={styles.createButton} onPress={() => navigation.navigate("CreateTeamScreen")}>
+                        <Plus color="#FFFFFF" size={20} />
+                        <Text style={styles.createButtonText}>Create Team</Text>
+                    </TouchableOpacity>
                 </View>
-
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity
-                    style={styles.modalCancelButton}
-                    onPress={() => handleRespondToInvitation("declined")}
-                  >
-                    <Text style={styles.modalCancelButtonText}>Decline</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.modalConfirmButton}
-                    onPress={() => handleRespondToInvitation("accepted")}
-                  >
-                    <Text style={styles.modalConfirmButtonText}>Accept</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
             )}
-          </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
-  )
+
+            {/* Invite Modal */}
+            <Modal visible={showInviteModal && selectedTeam !== null} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContainer}>
+                        <Text style={styles.modalTitle}>Invite Player</Text>
+                        <TextInput
+                            placeholder="Enter Player ID"
+                            value={invitePlayerID}
+                            onChangeText={setInvitePlayerID}
+                            style={styles.input}
+                        />
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity style={styles.modalButton} onPress={handleInvitePlayer}>
+                                <Text style={styles.modalButtonText}>Send Invite</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setShowInviteModal(false)}>
+                                <Text style={[styles.modalButtonText, { color: "#DC3545" }]}>Cancel</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+        </SafeAreaView>
+    )
 }
 
 const styles = StyleSheet.create({
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContainer: {
+        width: '85%',
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 20,
+        elevation: 10, // make sure this is enough
+        zIndex: 9999,
+    },
+
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        marginBottom: 12,
+    },
+    input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 10,
+        padding: 12,
+        marginBottom: 16,
+    },
+    modalButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    modalButton: {
+        flex: 1,
+        backgroundColor: '#007BFF',
+        padding: 12,
+        borderRadius: 10,
+        alignItems: 'center',
+        marginHorizontal: 4,
+    },
+    cancelButton: {
+        backgroundColor: '#F8F9FA',
+        borderWidth: 1,
+        borderColor: '#DC3545',
+    },
+    modalButtonText: {
+        color: '#fff',
+        fontWeight: '600',
+    },
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",

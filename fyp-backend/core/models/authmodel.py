@@ -2,14 +2,33 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 
 class UserManager(BaseUserManager):
-    def create_user(self, email, name, phone=None, position=None, skill_level=None, age=None, nationality=None, club=None, individual_rating=None, password=None):
+    def create_user(self, email, name, phone=None, position=None, skill_level=None, age=None,
+                    nationality=None, club=None, individual_rating=None, password=None):
         if not email:
             raise ValueError("Users must have an email address")
         email = self.normalize_email(email)
-        user = self.model(email=email, name=name, phone=phone, position=position, skill_level=skill_level, age=age, nationality=nationality, club=club, individual_rating=individual_rating)
+
+        # Use default if individual_rating is None
+        if individual_rating is None:
+            individual_rating = 0
+
+        user = self.model(
+            email=email,
+            name=name,
+            phone=phone,
+            position=position,
+            skill_level=skill_level,
+            age=age,
+            nationality=nationality,
+            club=club,
+            individual_rating=individual_rating,
+            is_active=True
+        )
         user.set_password(password)
         user.save(using=self._db)
         return user
+
+
 
     def create_superuser(self, email, name, phone=None, position=None, skill_level=None, age=None, nationality=None, club=None, individual_rating=None, password=None):
         user = self.create_user(email, name, phone, position, skill_level, age, nationality, club, individual_rating, password)

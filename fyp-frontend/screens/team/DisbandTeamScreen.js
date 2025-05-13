@@ -3,24 +3,44 @@
 import { useState } from "react"
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert } from "react-native"
 import { ChevronLeft, AlertTriangle } from "lucide-react-native"
+import AsyncStorage from "@react-native-async-storage/async-storage"
 
-const DisbandTeamScreen = ({ navigation }) => {
-  const [isLoading, setIsLoading] = useState(false)
 
-  const handleDisbandTeam = () => {
-    setIsLoading(true)
+const DisbandTeamScreen = ({ navigation, route }) => {
+    const { teamId } = route.params
+    const [isLoading, setIsLoading] = useState(false)
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false)
-      Alert.alert("Team Disbanded", "Your team has been successfully disbanded.", [
-        {
-          text: "OK",
-          onPress: () => navigation.navigate("HomeScreen"),
-        },
-      ])
-    }, 1500)
-  }
+
+    const handleDisbandTeam = async () => {
+        setIsLoading(true)
+
+        try {
+            const token = await AsyncStorage.getItem("accessToken")
+            if (!token) throw new Error("Access token not found")
+
+            const response = await fetch(`http://192.168.20.188:8000/api/teams/${teamId}/delete/`, {
+                method: "DELETE",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+            })
+
+            if (!response.ok) {
+                const errorData = await response.json()
+                throw new Error(errorData.error || "Failed to disband team")
+            }
+
+            setIsLoading(false)
+            Alert.alert("Team Disbanded", "Your team has been successfully disbanded.", [
+                {text: "OK", onPress: () => navigation.navigate("MainTabs", { screen: "Home" })},
+            ])
+        } catch (error) {
+            setIsLoading(false)
+            Alert.alert("Error", error.message)
+        }
+    }
+
 
   return (
     <SafeAreaView style={styles.container}>

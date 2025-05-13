@@ -5,8 +5,8 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs"
 import Icon from "react-native-vector-icons/MaterialCommunityIcons"
 
 // Import Context Providers
-import { TeamProvider } from "./context/TeamContext"
-import { SoloProvider } from "./context/SoloContext"
+//import { TeamProvider } from "./context/TeamContext"
+//import { SoloProvider } from "./context/SoloContext"
 
 // Import Screens
 import Onboarding1 from "./screens/onboarding/Onboarding1"
@@ -154,8 +154,7 @@ const MainStack = () => {
 // Root Navigator
 const App = () => {
   return (
-    <TeamProvider>
-      <SoloProvider>
+
         <NavigationContainer>
           <Stack.Navigator
             initialRouteName="Login"
@@ -178,8 +177,7 @@ const App = () => {
             </Stack.Group>
           </Stack.Navigator>
         </NavigationContainer>
-      </SoloProvider>
-    </TeamProvider>
+
   )
 }
 

@@ -19,13 +19,12 @@ class UserSerializer(serializers.ModelSerializer):
             'password'
         ]
         extra_kwargs = {
+            'is_active': {'read_only': True},
             'password': {'write_only': True, 'required': False},
             'email': {'required': False},
         }
 
     def create(self, validated_data):
-        if 'password' in validated_data:
-            validated_data['password'] = make_password(validated_data['password'])
         return User.objects.create_user(**validated_data)
 
     def update(self, instance, validated_data):

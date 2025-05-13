@@ -6,14 +6,14 @@ import { MaterialCommunityIcons } from "@expo/vector-icons"
 import { LinearGradient } from "expo-linear-gradient"
 import { useNavigation } from "@react-navigation/native"
 import { Bell } from "lucide-react-native"
-import { useTeam } from "../../context/TeamContext"
+//import { useTeam } from "../../context/TeamContext"
 
 const { width, height } = Dimensions.get("window")
 
 const HomeScreen = () => {
   const animatedValue = useRef(new Animated.Value(0)).current
   const navigation = useNavigation()
-  const { getUserTeamInvitations, getUserMatchInvitations, currentUser } = useTeam()
+ // const { getUserTeamInvitations, getUserMatchInvitations, currentUser } = useTeam()
   const [notificationCount, setNotificationCount] = useState(0)
 
   useEffect(() => {
@@ -28,12 +28,12 @@ const HomeScreen = () => {
     return () => animation.stop()
   }, [])
 
-  useEffect(() => {
-    // Count notifications
-    const teamInvites = getUserTeamInvitations()
-    const matchInvites = getUserMatchInvitations()
-    setNotificationCount(teamInvites.length + matchInvites.length)
-  }, [])
+  //useEffect(() => {
+  //  // Count notifications
+  //  const teamInvites = getUserTeamInvitations()
+  //  const matchInvites = getUserMatchInvitations()
+  //  setNotificationCount(teamInvites.length + matchInvites.length)
+  //}, [])
 
   const backgroundColor = animatedValue.interpolate({
     inputRange: [0, 0.5, 1],
@@ -65,7 +65,7 @@ const HomeScreen = () => {
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.welcomeText}>Welcome, {currentUser.name}</Text>
+        {/*<Text style={styles.welcomeText}>Welcome, {currentUser.name}</Text>*/}
         <Text style={styles.title}>Ready to Play?</Text>
         <Text style={styles.subtitle}>Find Your Match & Hit the Field</Text>
 

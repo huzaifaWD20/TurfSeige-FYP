@@ -1,16 +1,56 @@
-"use client"
+﻿"use client"
 
 import { useState } from "react"
 import { View, Text, StyleSheet, TouchableOpacity, Switch, SafeAreaView } from "react-native"
 import { ChevronLeft } from "lucide-react-native"
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const TeamSettingsScreen = ({ navigation }) => {
-  const [isPublic, setIsPublic] = useState(true)
-  const [requireApproval, setRequireApproval] = useState(true)
+
+const TeamSettingsScreen = ({ navigation, route }) => {
+    const { teamId } = route.params // get team ID from route
+    const [isPublic, setIsPublic] = useState(true)
+    const [requireApproval, setRequireApproval] = useState(true)
 
   const handleDisbandTeam = () => {
-    navigation.navigate("DisbandTeamScreen")
-  }
+      navigation.navigate("DisbandTeamScreen", { teamId })
+    }
+
+    const handleTogglePublic = async (value) => {
+        setIsPublic(value);
+        console.log("Setting is_public to:", value); // 👈 Logs current toggle value
+
+        try {
+            const token = await AsyncStorage.getItem('accessToken');
+            if (!token) {
+                console.error("Access token not found");
+                return;
+            }
+
+            const response = await fetch(`http://192.168.20.188:8000/api/teams/${teamId}/`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    is_public: value,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                console.error("Error updating team:", data.error || "Unknown error");
+            } else {
+                console.log("Team updated successfully:", data);
+            }
+
+        } catch (error) {
+            console.error("Failed to update team:", error);
+        }
+    };
+
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -28,12 +68,12 @@ const TeamSettingsScreen = ({ navigation }) => {
             <Text style={styles.settingTitle}>Public Team</Text>
             <Text style={styles.settingDescription}>Allow other users to find and request to join your team</Text>
           </View>
-          <Switch
-            value={isPublic}
-            onValueChange={setIsPublic}
-            trackColor={{ false: "#E5E5E5", true: "#007BFF" }}
-            thumbColor="#FFFFFF"
-          />
+                  <Switch
+                      value={isPublic}
+                      onValueChange={handleTogglePublic}
+                      trackColor={{ false: "#E5E5E5", true: "#007BFF" }}
+                      thumbColor="#FFFFFF"
+                  />
         </View>
 
         <View style={styles.settingItem}>

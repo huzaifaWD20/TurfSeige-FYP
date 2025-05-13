@@ -15,14 +15,14 @@ import {
   Alert,
 } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
-import { useTeam } from "../../context/TeamContext"
+//import { useTeam } from "../../context/TeamContext"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 
 
 const { width } = Dimensions.get("window")
 
 const Login = ({ navigation }) => {
-  const { setUser } = useTeam()
+ // const { setUser } = useTeam()
   const [activeTab, setActiveTab] = useState("email")
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
@@ -55,7 +55,7 @@ const Login = ({ navigation }) => {
             }
 
             try {
-                const response = await fetch("http://192.168.2.109:8000/api/login/", {
+                const response = await fetch("http://192.168.20.188:8000/api/login/", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",

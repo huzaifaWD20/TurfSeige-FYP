@@ -14,54 +14,93 @@ import {
 } from "react-native"
 import { ChevronLeft, Upload } from "lucide-react-native"
 import * as ImagePicker from "expo-image-picker"
-import { useTeam } from "../../context/TeamContext"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import * as FileSystem from "expo-file-system"
+
+
+//import { useTeam } from "../../context/TeamContext"
 
 const CreateTeamScreen = ({ navigation }) => {
-  const { createTeam } = useTeam()
+  //const { createTeam } = useTeam()
   const [teamName, setTeamName] = useState("")
   const [teamDescription, setTeamDescription] = useState("")
   const [teamLogo, setTeamLogo] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    const pickImage = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
 
-    if (status !== "granted") {
-      alert("Sorry, we need camera roll permissions to make this work!")
-      return
+        if (status !== "granted") {
+            alert("Sorry, we need camera roll permissions to make this work!")
+            return
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: [ImagePicker.MediaType.IMAGE],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+        })
+
+
+        if (!result.canceled) {
+            setTeamLogo(result.assets[0].uri)
+        }
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    })
+    const handleCreateTeam = async () => {
+        if (!teamName.trim()) return
 
-    if (!result.canceled) {
-      setTeamLogo(result.assets[0].uri)
-    }
-  }
+        setIsLoading(true)
 
-  const handleCreateTeam = () => {
-    if (!teamName.trim()) return
+        try {
+            const token = await AsyncStorage.getItem("accessToken")
+            if (!token) {
+                alert("Error", "Access token not found. Please log in again.")
+                setIsLoading(false)
+                return
+            }
 
-    setIsLoading(true)
+            let base64Logo = null
 
-    // Create team using context
-    const newTeam = createTeam({
-      name: teamName,
-      description: teamDescription,
-      logo: teamLogo || "https://via.placeholder.com/100",
-      isPublic: true,
-      requireApproval: true,
-    })
+            if (teamLogo) {
+                const base64Response = await FileSystem.readAsStringAsync(teamLogo, {
+                    encoding: FileSystem.EncodingType.Base64,
+                })
+                base64Logo = `data:image/jpeg;base64,${base64Response}`
+            }
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false)
-      navigation.navigate("TeamMembersScreen", { teamId: newTeam.id })
-    }, 1000)
+            const jsonBody = {
+                name: teamName,
+                description: teamDescription,
+                is_public: false,
+                player_ids: [],
+                logo: base64Logo, // base64-encoded string
+            }
+
+            const response = await fetch("http://192.168.20.188:8000/api/teams/create/", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(jsonBody),
+            })
+
+            const data = await response.json()
+
+            if (response.ok) {
+                alert("Success", "Team created successfully!")
+                navigation.navigate("TeamMembersScreen", { teamId: data.team_id })
+            } else {
+                alert("Error", data.error || "Failed to create team")
+            }
+        } catch (err) {
+            console.error("Team creation failed:", err)
+            alert("Error", "Something went wrong!")
+        } finally {
+            setIsLoading(false)
+        }
   }
 
   return (

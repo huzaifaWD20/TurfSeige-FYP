@@ -13,6 +13,8 @@ import {
 } from "react-native"
 import { ChevronLeft, Upload } from "lucide-react-native"
 import * as ImagePicker from "expo-image-picker"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import * as FileSystem from "expo-file-system"
 
 const EditTeamScreen = ({ navigation, route }) => {
   // In a real app, you would get this from route.params or a state management solution
@@ -39,19 +41,51 @@ const EditTeamScreen = ({ navigation, route }) => {
       setTeamLogo(result.assets[0].uri)
     }
   }
+    const handleSaveChanges = async () => {
+        if (!teamName.trim()) return
 
-  const handleSaveChanges = () => {
-    if (!teamName.trim()) return
+        try {
+            setIsLoading(true)
 
-    setIsLoading(true)
+            const token = await AsyncStorage.getItem("accessToken")
+            if (!token) {
+                alert("Authentication token not found.")
+                return
+            }
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false)
-      navigation.goBack()
-    }, 1500)
-  }
+            const { teamId } = route.params
 
+            const payload = {
+                name: teamName,
+                // If needed, you can also send:
+                // new_captain_id: 5,
+                // is_public: true,
+            }
+
+            const response = await fetch(`http://192.168.20.188:8000/api/teams/${teamId}/`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(payload),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.error || "Something went wrong!")
+            }
+
+            alert("Team updated successfully")
+            navigation.goBack()
+        } catch (err) {
+            console.error("Update failed:", err)
+            alert("Failed to update team: " + err.message)
+        } finally {
+            setIsLoading(false)
+        }
+    }
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
