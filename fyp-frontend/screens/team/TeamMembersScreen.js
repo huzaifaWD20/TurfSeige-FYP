@@ -209,15 +209,6 @@ const TeamMembersScreen = ({ navigation, route }) => {
                     <ChevronLeft color="#007BFF" size={24} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Team Members</Text>
-                {isAdmin && (
-                    <TouchableOpacity
-                        style={styles.settingsButton}
-                        onPress={() => navigation.navigate("TeamSettingsScreen", { requestingTeamId })}
-                    >
-                        <Settings color="#007BFF" size={20} />
-                    </TouchableOpacity>
-                )}
-                {!isAdmin && <View style={styles.placeholderView} />}
             </View>
 
             <View style={styles.teamInfoContainer}>
@@ -231,11 +222,6 @@ const TeamMembersScreen = ({ navigation, route }) => {
                     {team.description && <Text style={styles.teamDescription}>{team.description}</Text>}
                     <Text style={styles.memberCount}>{team.members.length} members</Text>
                 </View>
-                {isAdmin && (
-                    <TouchableOpacity style={styles.editButton} onPress={() => navigation.navigate("EditTeamScreen", { requestingTeamId })}>
-                        <Text style={styles.editButtonText}>Edit</Text>
-                    </TouchableOpacity>
-                )}
             </View>
 
             <View style={styles.actionContainer}>
@@ -270,15 +256,15 @@ const TeamMembersScreen = ({ navigation, route }) => {
                 }
             />
 
-            {isAdmin && (
-                <TouchableOpacity
-                    style={styles.inviteButton}
-                    onPress={() => navigation.navigate("InvitePlayersScreen", { requestingTeamId })}
-                >
-                    <UserPlus color="#FFFFFF" size={20} />
-                    <Text style={styles.inviteButtonText}>Invite Players</Text>
-                </TouchableOpacity>
-            )}
+            {/*{isAdmin && (*/}
+            {/*    <TouchableOpacity*/}
+            {/*        style={styles.inviteButton}*/}
+            {/*        onPress={() => navigation.navigate("InvitePlayersScreen", { requestingTeamId })}*/}
+            {/*    >*/}
+            {/*        <UserPlus color="#FFFFFF" size={20} />*/}
+            {/*        <Text style={styles.inviteButtonText}>Invite Players</Text>*/}
+            {/*    </TouchableOpacity>*/}
+            {/*)}*/}
 
             <RemovePlayerModal
                 isVisible={isRemoveModalVisible}

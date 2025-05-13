@@ -3,13 +3,9 @@
 import { useState } from "react"
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, SafeAreaView, Alert } from "react-native"
 import { ChevronLeft, Calendar, MapPin, Clock, CheckCircle, XCircle, User } from "lucide-react-native"
-import { useTeam } from "../../context/TeamContext"
-import { useSolo } from "../../context/SoloContext"
 
 const MatchRequestsScreen = ({ navigation, route }) => {
   const { tab = "incoming" } = route.params || {}
-  const { incomingRequests, outgoingRequests, respondToMatchRequest, cancelMatchRequest } = useTeam()
-  const { incomingSoloRequests, respondToSoloRequest } = useSolo()
 
   const [activeTab, setActiveTab] = useState(tab)
   const [activeSubTab, setActiveSubTab] = useState("team")

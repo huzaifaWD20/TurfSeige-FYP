@@ -28,6 +28,7 @@
     "cors": "^2.8.5",
     "expo": "~51.0.28",
     "expo-auth-session": "~5.5.2",
+    "expo-file-system": "~17.0.1",
     "expo-font": "~12.0.10",
     "expo-image-picker": "^16.0.6",
     "expo-linear-gradient": "^14.0.1",
@@ -35,6 +36,7 @@
     "express": "^4.21.2",
     "firebase": "^11.0.2",
     "fs": "^0.0.1-security",
+    "jwt-decode": "^3.1.2",
     "lucide-react": "^0.456.0",
     "lucide-react-native": "^0.456.0",
     "react": "18.2.0",
@@ -50,8 +52,7 @@
     "react-native-svg": "15.2.0",
     "react-native-vector-icons": "^10.2.0",
     "react-native-web": "^0.19.13",
-    "undefined": "expo-auth-session/providers/google",
-    "expo-file-system": "~17.0.1"
+    "undefined": "expo-auth-session/providers/google"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

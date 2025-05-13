@@ -73,6 +73,17 @@ const Login = ({ navigation }) => {
                     await AsyncStorage.setItem("accessToken", data.access)
                     await AsyncStorage.setItem("refreshToken", data.refresh)
 
+                    // Store userId
+                    if (data.userId) {
+                        await AsyncStorage.setItem("userId", data.userId.toString())
+
+                        // Retrieve and print to console
+                        const storedUserId = await AsyncStorage.getItem("userId")
+                        console.log("Stored User ID:", storedUserId)
+                    } else {
+                        console.warn("No userId found in login response.")
+                    }
+
                     setIsLoading(false)
                     navigation.replace("Main")
                 } else {
@@ -94,6 +105,8 @@ const Login = ({ navigation }) => {
             setIsLoading(false)
         }
     }
+
+
 
   //const handleLogin = () => {
   //  setIsLoading(true)

@@ -9,14 +9,13 @@ from django.shortcuts import get_object_or_404
 class OpenMatchView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def post(self, request):
-        
-
         team_id = request.data.get('team_id')
         if not team_id:
             return Response({'error': 'Team ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         team = get_object_or_404(Team, id=team_id)
 
+        # Only captain can create the match
         if team.captain != request.user:
             return Response({'error': 'Only the team captain can create a match.'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -30,32 +29,29 @@ class OpenMatchView(APIView):
         try:
             required_players = int(match_format.split('v')[0])
         except ValueError:
-            return Response({'error': 'Invalid match format format.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Invalid match format.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check total players including captain
+        # Get confirmed team members including captain
         team_members = list(team.members.all())
         if request.user not in team_members:
             team_members.append(request.user)
+
         confirmed_count = len(team_members)
 
-        if confirmed_count < required_players:
-            return Response({
-                'error': f"{match_format} requires at least {required_players} players (including captain). Your team has only {confirmed_count} available."
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Save match with required & confirmed players
+        # Save the match
         serializer = OpenMatchSerializer(data=match_data)
         if serializer.is_valid():
             open_match = serializer.save(team=team)
 
-            # Assign confirmed and required players
             open_match.required_players = required_players
-            open_match.confirmed_players.set(team_members[:required_players])
+            open_match.confirmed_players.set(team_members)
             open_match.save()
 
             return Response({
                 'message': 'Open match created successfully.',
-                'data': OpenMatchSerializer(open_match).data
+                'data': OpenMatchSerializer(open_match).data,
+                'confirmed_players_count': confirmed_count,
+                'required_players': required_players
             }, status=status.HTTP_201_CREATED)
 
         return Response({'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)

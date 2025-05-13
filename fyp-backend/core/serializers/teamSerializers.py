@@ -1,11 +1,11 @@
-from rest_framework import serializers
+﻿from rest_framework import serializers
 from core.models.authmodel import User
 from core.models.teamsmodel import Team
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'email', 'name']
+        fields = ['id', 'email', 'name', 'position']  # ← Include position
 
 class TeamSerializer(serializers.ModelSerializer):
     members = UserSerializer(many=True, read_only=True)
@@ -17,6 +17,8 @@ class TeamSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Team
-        fields = ['id', 'name', 'description', 'logo', 'members', 'member_ids',
-        'is_public', 'captain', 'matches_played', 'wins', 'losses', 'draws'
+        fields = [
+            'id', 'name', 'description', 'logo',
+            'members', 'member_ids', 'is_public', 'captain',
+            'matches_played', 'wins', 'losses', 'draws'
         ]

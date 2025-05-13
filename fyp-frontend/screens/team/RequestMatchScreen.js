@@ -11,33 +11,12 @@ import {
     ScrollView,
     ActivityIndicator,
     FlatList,
-    Image,
+    Alert,
 } from "react-native"
 import { ChevronLeft, Calendar, MapPin, Clock, MessageSquare } from "lucide-react-native"
 import DateTimePicker from "@react-native-community/datetimepicker"
 import { Picker } from "@react-native-picker/picker"
-
-// 🟡 Mock teams array (replace with your real data source later)
-const teams = [
-    {
-        id: "1",
-        name: "Water Board FC",
-        logo: "https://example.com/thunder-logo.png",
-        members: [
-            { id: "1", name: "John", role: "Captain", avatar: "https://example.com/avatar1.png" },
-            { id: "2", name: "Mike", role: "Defender", avatar: "https://example.com/avatar2.png" },
-        ],
-    },
-    {
-        id: "7",
-        name: "Sadi town Fc",
-        logo: "https://example.com/lightning-logo.png",
-        members: [
-            { id: "3", name: "Leo", role: "Captain", avatar: "https://example.com/avatar3.png" },
-            { id: "4", name: "Chris", role: "Striker", avatar: "https://example.com/avatar4.png" },
-        ],
-    },
-]
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const RequestMatchScreen = ({ navigation, route }) => {
     const {
@@ -47,14 +26,9 @@ const RequestMatchScreen = ({ navigation, route }) => {
         requestingTeamName,
     } = route.params;
 
-    useEffect(() => {
-        console.log("Opponent Team ID:", opponentTeamId);
-        console.log("Opponent Team Name:", opponentTeamName);
-        console.log("Requesting Team ID:", requestingTeamId);
-        console.log("Requesting Team Name:", requestingTeamName);
-    }, []);
-
     const [userTeam, setUserTeam] = useState(null)
+    const [teamMembers, setTeamMembers] = useState([])
+    const [selectedMembers, setSelectedMembers] = useState([])
     const [date, setDate] = useState(new Date())
     const [time, setTime] = useState(new Date())
     const [location, setLocation] = useState("")
@@ -63,19 +37,58 @@ const RequestMatchScreen = ({ navigation, route }) => {
     const [showDatePicker, setShowDatePicker] = useState(false)
     const [showTimePicker, setShowTimePicker] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
-    const [teamMembers, setTeamMembers] = useState([])
-    const [selectedMembers, setSelectedMembers] = useState([])
+    const [isTeamDataLoading, setIsTeamDataLoading] = useState(true)
+    const [errorMessage, setErrorMessage] = useState(null)
 
+    // Fetch team data when component mounts
     useEffect(() => {
-        const currentTeam = teams.find((team) => team.id === String(requestingTeamId))
-        setUserTeam(currentTeam)
+        fetchTeamData();
+    }, [requestingTeamId]);
 
-        if (currentTeam) {
-            setTeamMembers(currentTeam.members)
-            setSelectedMembers(currentTeam.members.map((member) => member.id))
+    const fetchTeamData = async () => {
+        setIsTeamDataLoading(true);
+        setErrorMessage(null);
+
+        try {
+            const token = await AsyncStorage.getItem('accessToken');
+            if (!token) throw new Error('Authentication token not found');
+
+            const response = await fetch(`http://192.168.20.188:8000/api/teams/${requestingTeamId}/`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+
+            const data = await response.json();
+
+            // Safely handle the data structure
+            const members = data.members?.map(member => ({
+                ...member,
+                position: member?.position || 'Not specified' // Default value if position is null/undefined
+            })) || []; // Fallback empty array if members is undefined
+
+            console.log("Team data:", data);
+            console.log("Processed members:", members);
+
+            setUserTeam({
+                ...data,
+                members: members
+            });
+
+            setTeamMembers(members);
+            setSelectedMembers(members.map(member => member.id));
+
+            setIsTeamDataLoading(false);
+        } catch (error) {
+            console.error('Error fetching team data:', error);
+            setErrorMessage(error.message || 'Failed to load team data');
+            setIsTeamDataLoading(false);
         }
-    }, [requestingTeamId])
-
+    };
     const handleDateChange = (event, selectedDate) => {
         const currentDate = selectedDate || date
         setShowDatePicker(false)
@@ -96,39 +109,96 @@ const RequestMatchScreen = ({ navigation, route }) => {
         }
     }
 
-    const handleSendRequest = () => {
-        if (!location) return
+    const handleSendRequest = async () => {
+        if (!location) {
+            Alert.alert("Missing Information", "Please enter a match location");
+            return;
+        }
 
-        setIsLoading(true)
+        setIsLoading(true);
 
-        const matchDateTime = new Date(date)
-        matchDateTime.setHours(time.getHours(), time.getMinutes())
+        try {
+            // Format the date to match what Django expects (YYYY-MM-DD)
+            const dateStr = date.toISOString().split('T')[0];
 
-        const unselectedMembers = teamMembers.filter((member) => !selectedMembers.includes(member.id))
+            // Prepare request payload that matches your Django view's expectations
+            const requestData = {
+                requestingTeamId: requestingTeamId,  // Note camelCase to match your Django view
+                targetTeamId: opponentTeamId,       // Note camelCase to match your Django view
+                format: format,                     // Simple format name (not match_format)
+                date: dateStr,                      // Just the date part (YYYY-MM-DD)
+                location: location,
+                message: message,
+                // selected_members: selectedMembers, // Uncomment if you implement this later
+            };
 
-        setTimeout(() => {
-            setIsLoading(false)
-            navigation.navigate("MatchRequestsScreen", { tab: "outgoing" })
-        }, 1000)
-    }
+            const token = await AsyncStorage.getItem('accessToken');
+            if (!token) throw new Error('Authentication token not found');
 
-    const renderMemberItem = ({ item }) => (
-        <TouchableOpacity
-            style={[styles.memberItem, selectedMembers.includes(item.id) && styles.selectedMemberItem]}
-            onPress={() => toggleMemberSelection(item.id)}
-        >
-            <Image source={{ uri: item.avatar }} style={styles.memberAvatar} />
-            <View style={styles.memberInfo}>
-                <Text style={styles.memberName}>{item.name}</Text>
-                <Text style={styles.memberRole}>{item.role}</Text>
-            </View>
-            <View style={[styles.checkBox, selectedMembers.includes(item.id) && styles.checkedBox]}>
-                {selectedMembers.includes(item.id) && <Text style={styles.checkMark}>✓</Text>}
-            </View>
-        </TouchableOpacity>
-    )
+            const response = await fetch('http://192.168.20.188:8000/api/match/request/custom/', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestData),
+            });
 
-    if (!teamMembers.length) {
+            // Check if the response is successful (status code 2xx)
+            if (!response.ok) {
+                // Try to parse the error response
+                let errorMessage = 'Failed to send match request';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorMessage;
+                } catch (e) {
+                    console.warn('Could not parse error response', e);
+                }
+                throw new Error(errorMessage);
+            }
+
+            // If successful
+            Alert.alert(
+                "Success",
+                "Match request sent successfully!",
+                [{ text: "OK", onPress: () => navigation.navigate("MatchRequestsScreen", { tab: "outgoing" }) }]
+            );
+        } catch (error) {
+            console.error('Error sending match request:', error);
+            Alert.alert(
+                "Error",
+                error.message || "Failed to send match request. Please try again."
+            );
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    const renderMemberItem = ({ item }) => {
+        if (!item) return null; // Safety check
+
+        const isCaptain = userTeam?.captain === item.id;
+        const position = item.position || 'Position not set';
+
+        return (
+            <TouchableOpacity
+                style={[styles.memberItem, selectedMembers.includes(item.id) && styles.selectedMemberItem]}
+                onPress={() => toggleMemberSelection(item.id)}
+            >
+                <View style={styles.memberAvatar}>
+                    <Text style={styles.memberInitial}>{(item.name || '?').charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={styles.memberInfo}>
+                    <Text style={styles.memberName}>{item.name || 'Unknown'}</Text>
+                    <Text style={styles.memberRole}>{isCaptain ? 'Captain' : 'Member'}</Text>
+                    <Text style={styles.memberPosition}>{position}</Text>
+                </View>
+                <View style={[styles.checkBox, selectedMembers.includes(item.id) && styles.checkedBox]}>
+                    {selectedMembers.includes(item.id) && <Text style={styles.checkMark}>✓</Text>}
+                </View>
+            </TouchableOpacity>
+        );
+    };
+    if (isTeamDataLoading) {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
@@ -139,7 +209,28 @@ const RequestMatchScreen = ({ navigation, route }) => {
                     <View style={styles.placeholderView} />
                 </View>
                 <View style={styles.loadingContainer}>
-                    <Text>Loading team data...</Text>
+                    <ActivityIndicator size="large" color="#007BFF" />
+                    <Text style={styles.loadingText}>Loading team data...</Text>
+                </View>
+            </SafeAreaView>
+        )
+    }
+
+    if (errorMessage) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.header}>
+                    <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+                        <ChevronLeft color="#007BFF" size={24} />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Request Match</Text>
+                    <View style={styles.placeholderView} />
+                </View>
+                <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>{errorMessage}</Text>
+                    <TouchableOpacity style={styles.retryButton} onPress={fetchTeamData}>
+                        <Text style={styles.retryButtonText}>Retry</Text>
+                    </TouchableOpacity>
                 </View>
             </SafeAreaView>
         )
@@ -237,22 +328,24 @@ const RequestMatchScreen = ({ navigation, route }) => {
                     </View>
                 </View>
 
-                <View style={styles.formGroup}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.label}>Invite Team Members</Text>
-                        <TouchableOpacity onPress={() => setSelectedMembers(teamMembers.map((member) => member.id))}>
-                            <Text style={styles.selectAllText}>Select All</Text>
-                        </TouchableOpacity>
+                {teamMembers.length > 0 && (
+                    <View style={styles.formGroup}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.label}>Invite Team Members</Text>
+                            <TouchableOpacity onPress={() => setSelectedMembers(teamMembers.map((member) => member.id))}>
+                                <Text style={styles.selectAllText}>Select All</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <Text style={styles.helperText}>Unselected members will create openings for solo players to join</Text>
+                        <FlatList
+                            data={teamMembers}
+                            renderItem={renderMemberItem}
+                            keyExtractor={(item) => item.id.toString()}
+                            scrollEnabled={false}
+                            style={styles.membersList}
+                        />
                     </View>
-                    <Text style={styles.helperText}>Unselected members will create openings for solo players to join</Text>
-                    <FlatList
-                        data={teamMembers}
-                        renderItem={renderMemberItem}
-                        keyExtractor={(item) => item.id}
-                        scrollEnabled={false}
-                        style={styles.membersList}
-                    />
-                </View>
+                )}
 
                 <TouchableOpacity
                     style={[styles.sendButton, (!location) && styles.disabledButton]}
@@ -298,6 +391,34 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
+    },
+    loadingText: {
+        marginTop: 16,
+        fontSize: 16,
+        color: "#666666",
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 24,
+    },
+    errorText: {
+        fontSize: 16,
+        color: "#FF3B30",
+        textAlign: "center",
+        marginBottom: 16,
+    },
+    retryButton: {
+        backgroundColor: "#007BFF",
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 16,
+    },
+    retryButtonText: {
+        color: "#FFFFFF",
+        fontSize: 16,
+        fontWeight: "600",
     },
     content: {
         flex: 1,
@@ -418,6 +539,19 @@ const styles = StyleSheet.create({
         height: 40,
         borderRadius: 20,
         marginRight: 12,
+        backgroundColor: "#007BFF",
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    memberInitial: {
+        color: "#FFFFFF",
+        fontSize: 18,
+        fontWeight: "bold",
+    },
+    memberPosition: {
+        fontSize: 11,
+        color: "#888888",
+        marginTop: 2,
     },
     memberInfo: {
         flex: 1,

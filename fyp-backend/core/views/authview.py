@@ -25,6 +25,19 @@ class SignUpView(APIView):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 class LoginView(TokenObtainPairView):
     permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        # Generate the access and refresh tokens
+        response = super().post(request, *args, **kwargs)
+
+        # Check if login is successful and attach user info
+        if response.status_code == 200:
+            user = User.objects.get(email=request.data['email'])
+            response.data.update({
+                'userId': user.id,
+                'userEmail': user.email,
+                'userName': user.name
+            })
+        return response

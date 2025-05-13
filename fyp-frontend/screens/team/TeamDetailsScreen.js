@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react"
 import { View, Text, StyleSheet, TouchableOpacity, Image, SafeAreaView, FlatList, ScrollView } from "react-native"
-import { ChevronLeft, Users, Calendar, Trophy, TrendingUp, Clock, MapPin, Shield } from "lucide-react-native"
+import { ChevronLeft, Users, Calendar, Trophy, TrendingUp, Clock, MapPin, Shield, Settings, MoreVertical } from "lucide-react-native"
 //import { useTeam } from "../../context/TeamContext"
+import RemovePlayerModal from "./RemovePlayerModal"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 
 const TeamDetailsScreen = ({ navigation, route }) => {
@@ -13,7 +14,10 @@ const TeamDetailsScreen = ({ navigation, route }) => {
     const [team, setTeam] = useState(null)
     const [isCaptain, setIsCaptain] = useState(false)
     const [activeTab, setActiveTab] = useState(initialTab)
+    const [selectedMember, setSelectedMember] = useState(null)
+    const [isRemoveModalVisible, setIsRemoveModalVisible] = useState(false)
     const [loading, setLoading] = useState(true)
+   // const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchTeamDetails = async () => {
@@ -26,7 +30,7 @@ const TeamDetailsScreen = ({ navigation, route }) => {
                     return;
                 }
 
-                console.log("Fetching data for teamId:", teamId);
+                // Fetch team details
                 const response = await fetch(`http://192.168.20.188:8000/api/teams/${teamId}/`, {
                     method: "GET",
                     headers: {
@@ -40,24 +44,19 @@ const TeamDetailsScreen = ({ navigation, route }) => {
                 }
 
                 const data = await response.json();
-                console.log("Team data received:", data);
 
-                // Debug the captain data
-                console.log("Captain data:", data.captain);
-
-                // Get the captain ID (now handling if it's directly a number)
+                // Get the captain ID (assuming the captain is a field with the user ID)
                 const captainId = data.captain ? String(data.captain) : null;
-                console.log("Captain ID:", captainId);
 
+                // Check if the current logged-in user is the captain
+                const currentUserId = await AsyncStorage.getItem('userId'); // Fetch current user ID from storage
+                const isCurrentUserCaptain = currentUserId === captainId;
+                setIsCaptain(isCurrentUserCaptain); // Set the captain status
+
+                // Transform team members with the captain role
                 const transformedMembers = data.members.map(member => {
-                    // Convert both IDs to strings for comparison
                     const memberId = String(member.id);
-                    // Check if member is captain by comparing IDs
                     const isCaptain = captainId === memberId;
-                    if (isCaptain) {
-                        console.log(`Found captain with ID ${memberId}`);
-                    }
-
                     const memberUsername = member.username || member.name || '';
                     return {
                         ...member,
@@ -67,17 +66,12 @@ const TeamDetailsScreen = ({ navigation, route }) => {
                     };
                 });
 
-                console.log("Transformed Members:", transformedMembers);
-
                 setTeam({
                     ...data,
                     members: transformedMembers,
                     logo: data.logo || "https://via.placeholder.com/60",
                 });
 
-                // Check if current user is the captain
-                const isCurrentUserCaptain = data.captain;
-                setIsCaptain(isCurrentUserCaptain);  // Set the captain status for UI control
             } catch (error) {
                 console.error("Error fetching team details:", error);
             } finally {
@@ -107,6 +101,41 @@ const TeamDetailsScreen = ({ navigation, route }) => {
         )
     }
 
+    const handleRemovePlayer = async () => {
+        if (selectedMember) {
+            try {
+                const token = await AsyncStorage.getItem('accessToken');
+                if (!token) {
+                    console.warn('No token found');
+                    return;
+                }
+
+                const response = await fetch(`http://192.168.20.188:8000/api/teams/${teamId}/remove-player/`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ player_id: selectedMember.id }),
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Failed to remove player');
+                }
+
+                // If player removal was successful, update the team members list
+                const updatedMembers = team.members.filter((member) => member.id !== selectedMember.id);
+                setTeam({ ...team, members: updatedMembers });
+
+                setIsRemoveModalVisible(false);  // Close the modal
+                setSelectedMember(null);  // Clear selected member
+            } catch (error) {
+                console.error('Error removing player:', error);
+            }
+        }
+    };
+
     const renderMemberItem = ({ item }) => (
         <View style={styles.memberItem}>
             <Image
@@ -119,11 +148,23 @@ const TeamDetailsScreen = ({ navigation, route }) => {
                     <Text style={[styles.roleText, item.role === "Captain" && styles.captainText]}>{item.role}</Text>
                 </View>
             </View>
-            {item.role === "Captain" && (
+            {item.role === "Captain" ? (
+                // Show captain icon if this member is a captain
                 <View style={styles.captainIcon}>
                     <Shield color="#007BFF" size={20} />
                 </View>
-            )}
+            ) : isCaptain ? (
+                // Show options button only if current user is a captain and item is NOT a captain
+                <TouchableOpacity
+                    style={styles.menuButton}
+                    onPress={() => {
+                        setSelectedMember(item);
+                        setIsRemoveModalVisible(true);
+                    }}
+                >
+                    <MoreVertical color="#666666" size={20} />
+                </TouchableOpacity>
+            ) : null}
         </View>
     )
 
@@ -165,8 +206,11 @@ const TeamDetailsScreen = ({ navigation, route }) => {
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{team.name}</Text>
                 {isCaptain && (
-                    <TouchableOpacity style={styles.editButton} onPress={() => navigation.navigate("EditTeamScreen", { teamId })}>
-                        <Text style={styles.editButtonText}>Edit</Text>
+                    <TouchableOpacity
+                        style={styles.settingsButton}
+                        onPress={() => navigation.navigate("TeamSettingsScreen", { teamId })}
+                    >
+                        <Settings color="#007BFF" size={20} />
                     </TouchableOpacity>
                 )}
                 {!isCaptain && <View style={styles.placeholderView} />}
@@ -182,6 +226,12 @@ const TeamDetailsScreen = ({ navigation, route }) => {
                     {team.description && <Text style={styles.teamDescription}>{team.description}</Text>}
                     <Text style={styles.memberCount}>{team.members.length} members</Text>
                 </View>
+                {isCaptain && (
+                    <TouchableOpacity style={styles.editButton} onPress={() => navigation.navigate("EditTeamScreen", { teamId })}>
+                        <Text style={styles.editButtonText}>Edit</Text>
+                    </TouchableOpacity>
+                )}
+                {!isCaptain && <View style={styles.placeholderView} />}
             </View>
 
             <View style={styles.tabContainer}>
@@ -327,6 +377,15 @@ const TeamDetailsScreen = ({ navigation, route }) => {
                     </View>
                 )}
             </ScrollView>
+            <RemovePlayerModal
+                isVisible={isRemoveModalVisible}
+                member={selectedMember}
+                onCancel={() => {
+                    setIsRemoveModalVisible(false)
+                    setSelectedMember(null)
+                }}
+                onRemove={handleRemovePlayer}
+            />
         </SafeAreaView>
     )
 }
@@ -355,6 +414,24 @@ const styles = StyleSheet.create({
         color: "#007BFF",
         flex: 1,
         textAlign: "center",
+    },
+    settingsButton: {
+        padding: 8,
+        width: 40,
+        alignItems: "center",
+    },
+    menuButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: "#F8F9FA",
+        justifyContent: "center",
+        alignItems: "center",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
     },
     editButton: {
         backgroundColor: "#F0F0F0",
@@ -579,9 +656,9 @@ const styles = StyleSheet.create({
         color: "#007BFF",
     },
     captainIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         backgroundColor: "#F8F9FA",
         justifyContent: "center",
         alignItems: "center",
