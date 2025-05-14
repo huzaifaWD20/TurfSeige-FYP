@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from core.models.matchmodel import MatchRequest, OpenMatch, MatchJoinRequest, MatchInvitation
 from core.models.teamsmodel import Team
-from core.serializers.matchSerializers import MatchRequestSerializer, MatchJoinRequestSerializer, MatchInvitationSerializer
+from core.serializers.matchSerializers import MatchRequestSerializer, MatchJoinRequestSerializer, MatchInvitationSerializer,  TeamCaptainSerializer
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Q  # Add this import at the top of your file
@@ -481,3 +481,98 @@ class MatchInvitationResponseView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+class CompletedMatchesView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        completed_matches = MatchRequest.objects.filter(
+            status='accepted'
+        ).filter(
+            requesting_team__captain=user
+        ) | MatchRequest.objects.filter(
+            status='accepted',
+            target_team__captain=user
+        )
+
+        data = []
+
+        for match in completed_matches:
+            requesting_team = match.requesting_team
+            target_team = match.target_team
+
+            requesting_captain = requesting_team.captain if requesting_team else None
+            target_captain = target_team.captain if target_team else None
+
+            # ✅ Get confirmed players for requesting team from both models
+            requesting_confirmed_players_invitation = MatchInvitation.objects.filter(
+                match=match,
+                team_side='requesting',
+                status='accepted'
+            ).select_related('user')
+
+            requesting_confirmed_players_join_request = MatchJoinRequest.objects.filter(
+                match=match,
+                team_side='requesting',
+                status='accepted'
+            ).select_related('user')
+
+            # ✅ Get confirmed players for target team from both models
+            target_confirmed_players_invitation = MatchInvitation.objects.filter(
+                match=match,
+                team_side='target',
+                status='accepted'
+            ).select_related('user')
+
+            target_confirmed_players_join_request = MatchJoinRequest.objects.filter(
+                match=match,
+                team_side='target',
+                status='accepted'
+            ).select_related('user')
+
+            # Combine both invitation and join request players for each team
+            requesting_confirmed_players = list(requesting_confirmed_players_invitation) + list(requesting_confirmed_players_join_request)
+            target_confirmed_players = list(target_confirmed_players_invitation) + list(target_confirmed_players_join_request)
+
+            def serialize_players(player_qs):
+                return [
+                    {
+                        'id': player.user.id,
+                        'name': player.user.name,
+                        'role': getattr(player.user, 'role', None)  # adjust field if needed
+                    }
+                    for player in player_qs
+                ]
+
+            match_data = {
+                'id': match.id,
+                'date': match.date,
+                'location': match.location,
+                'format': match.match_format,
+                'status': match.status,
+                'requesting_team': {
+                    'id': requesting_team.id if requesting_team else None,
+                    'name': requesting_team.name if requesting_team else None,
+                    'captain': TeamCaptainSerializer(requesting_captain).data if requesting_captain else None,
+                    'required_players': match.requesting_required_players,
+                    'confirmed_players_count': match.requesting_confirmed_players,
+                    'confirmed_players': serialize_players(requesting_confirmed_players),
+                    'team_status': match.requesting_status,
+                },
+                'target_team': {
+                    'id': target_team.id if target_team else None,
+                    'name': target_team.name if target_team else None,
+                    'captain': TeamCaptainSerializer(target_captain).data if target_captain else None,
+                    'required_players': match.target_required_players,
+                    'confirmed_players_count': match.target_confirmed_players,
+                    'confirmed_players': serialize_players(target_confirmed_players),
+                    'team_status': match.target_status,
+                }
+            }
+
+            data.append(match_data)
+
+        return Response(data)

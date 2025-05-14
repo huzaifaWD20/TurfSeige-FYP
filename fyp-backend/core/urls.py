@@ -4,7 +4,7 @@ from core.views.profileview import UserProfile
 from core.views.teamsview import TeamsView, CheckTeamStatusView, AvailablePlayersView, DeleteTeamView, RemovePlayerView
 from core.views.teaminvitationview import JoinTeamView, InvitationRespondView, ListPendingInvitationsView,TeamInvitesUserView, ViewInvitationsSentToUserView
 from core.views.matchview import OpenMatchView
-from core.views.matchrequestview import MatchRequestCreateView,  MatchRequestListView, CustomMatchRequestCreateView, DirectMatchRequestListView, OpenMatchListView, JoinMatchSlotRequestView, MatchJoinApprovalView, PendingJoinRequestsView, MatchRespondView,UserInvitationsView, MatchInvitationResponseView
+from core.views.matchrequestview import MatchRequestCreateView,  MatchRequestListView, CustomMatchRequestCreateView, DirectMatchRequestListView, OpenMatchListView, JoinMatchSlotRequestView, MatchJoinApprovalView, PendingJoinRequestsView, MatchRespondView,UserInvitationsView, MatchInvitationResponseView, CompletedMatchesView
 
 urlpatterns = [
     # authview
@@ -51,6 +51,8 @@ urlpatterns = [
     path('match/invitations/', UserInvitationsView.as_view(), name='user-invitations'),
 
     path('match/invitations/<int:invitation_id>/respond/', MatchInvitationResponseView.as_view(), name='invitation-respond'),
+
+    path('matches/completed/', CompletedMatchesView.as_view(), name='completed-matches'),
 
 
 ]
