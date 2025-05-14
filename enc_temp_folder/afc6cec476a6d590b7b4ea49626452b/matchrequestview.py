@@ -193,92 +193,153 @@ class MatchRespondView(APIView):
 
 class OpenMatchListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-
+    
     def get(self, request):
-        # Get accepted matches where at least one team is incomplete
-        matches = MatchRequest.objects.filter(
-            status='accepted'
-        ).filter(
-            Q(requesting_status='incomplete') | Q(target_status='incomplete')
-        )
-
+        SUBSTITUTION_SLOTS = 3  # Configurable number of sub slots
+        
+        matches = MatchRequest.objects.filter(status='accepted')
         data = []
+        
         for match in matches:
-            # Calculate open slots (only show positive numbers)
-            open_slots_req = max(match.requesting_required_players, 0)
-            open_slots_tar = max(match.target_required_players, 0)
+            # Calculate availability for each team
+            req_available = self.calculate_team_availability(
+                match.requesting_required_players,
+                match.requesting_confirmed_players,
+                SUBSTITUTION_SLOTS
+            )
             
-            # Only include matches that actually have open slots
-            if open_slots_req > 0 or open_slots_tar > 0:
+            tar_available = self.calculate_team_availability(
+                match.target_required_players,
+                match.target_confirmed_players,
+                SUBSTITUTION_SLOTS
+            )
+            
+            # Only show matches where at least one team has availability
+            if req_available['has_availability'] or tar_available['has_availability']:
                 entry = MatchRequestSerializer(match).data
-                entry['open_slots_requesting'] = open_slots_req
-                entry['open_slots_target'] = open_slots_tar
+                entry.update({
+                    'requesting_team': {
+                        'open_slots': req_available['available_slots'],
+                        'are_substitution': req_available['is_substitution'],
+                        'has_availability': req_available['has_availability'],
+                        'max_capacity_reached': req_available['max_capacity_reached']
+                    },
+                    'target_team': {
+                        'open_slots': tar_available['available_slots'],
+                        'are_substitution': tar_available['is_substitution'],
+                        'has_availability': tar_available['has_availability'],
+                        'max_capacity_reached': tar_available['max_capacity_reached']
+                    }
+                })
                 data.append(entry)
-
+        
         return Response(data)
+    
+    def calculate_team_availability(self, required_players, confirmed_players, sub_slots):
+        max_capacity = required_players + sub_slots
+        max_capacity_reached = confirmed_players >= max_capacity
+        
+        if max_capacity_reached:
+            return {
+                'available_slots': 0,
+                'is_substitution': False,
+                'has_availability': False,
+                'max_capacity_reached': True
+            }
+        
+        # Calculate regular slots needed
+        regular_needed = max(required_players - confirmed_players, 0)
+        
+        if regular_needed > 0:
+            return {
+                'available_slots': regular_needed,
+                'is_substitution': False,
+                'has_availability': True,
+                'max_capacity_reached': False
+            }
+        else:
+            sub_available = max(max_capacity - confirmed_players, 0)
+            return {
+                'available_slots': sub_available,
+                'is_substitution': True,
+                'has_availability': sub_available > 0,
+                'max_capacity_reached': False
+            }
+
 
 class JoinMatchSlotRequestView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    SUBSTITUTION_SLOTS = 3  # Must match OpenMatchListView value
 
     def post(self, request, match_id):
         user = request.user
         team_side = request.data.get('team_side')
+        position = request.data.get('position')
 
-        # Validate team_side choices
+        # Validate inputs
         if team_side not in ['requesting', 'target']:
-            return Response({'error': 'Invalid team side. Must be either "requesting" or "target".'}, 
-                          status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Invalid team side'}, status=status.HTTP_400_BAD_REQUEST)
+        if not position:
+            return Response({'error': 'Position is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            match = MatchRequest.objects.get(id=match_id)
+            match = MatchRequest.objects.get(id=match_id, status='accepted')
         except MatchRequest.DoesNotExist:
-            return Response({'error': 'Match not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Match not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Check if user is already a member or captain of either team
-        is_requesting_team_member = match.requesting_team.members.filter(id=user.id).exists()
-        is_target_team_member = match.target_team.members.filter(id=user.id).exists()
-        is_requesting_captain = match.requesting_team.captain == user
-        is_target_captain = match.target_team.captain == user
+        # Check if user is already associated with either team
+        if self.is_user_in_teams(user, match):
+            return Response(
+                {'error': 'You are already associated with one of the teams'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
-        if is_requesting_team_member or is_target_team_member or is_requesting_captain or is_target_captain:
-            return Response({
-                'error': 'You cannot send a join request as you are already a member or captain of one of the teams.'
-            }, status=status.HTTP_403_FORBIDDEN)
+        # Check for existing pending request
+        if MatchJoinRequest.objects.filter(match=match, user=user, status='pending').exists():
+            return Response(
+                {'error': 'You already have a pending request for this match'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # Check if user already has a pending request for this match
-        existing_request = MatchJoinRequest.objects.filter(
-            match=match,
-            user=user,
-            status='pending'
-        ).exists()
+        # Check team capacity
+        if team_side == 'requesting':
+            max_capacity = match.requesting_required_players + self.SUBSTITUTION_SLOTS
+            current_players = match.requesting_confirmed_players
+        else:
+            max_capacity = match.target_required_players + self.SUBSTITUTION_SLOTS
+            current_players = match.target_confirmed_players
 
-        if existing_request:
-            return Response({
-                'error': 'You already have a pending join request for this match.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        if current_players >= max_capacity:
+            return Response(
+                {'error': 'This team has reached maximum capacity'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # Get user details
-        user_name = user.name  # Assuming your User model has a name field
-        user_position = request.data.get('position')  # Position from request data
-
-        if not user_position:
-            return Response({'error': 'Position is required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Create the join request
+        # Create join request
         join_request = MatchJoinRequest.objects.create(
             match=match,
             user=user,
-            name=user_name,
-            position=user_position,
+            name=user.name,
+            position=position,
             team_side=team_side,
             status='pending'
         )
-        
-        serializer = MatchJoinRequestSerializer(join_request)
-        return Response({
-            'message': 'Join request submitted successfully.',
-            'data': serializer.data
-        }, status=status.HTTP_201_CREATED)
+
+        return Response(
+            {
+                'message': 'Join request submitted',
+                'data': MatchJoinRequestSerializer(join_request).data,
+                'is_substitution': current_players >= match.requesting_required_players
+            },
+            status=status.HTTP_201_CREATED
+        )
+
+    def is_user_in_teams(self, user, match):
+        return (
+            match.requesting_team.members.filter(id=user.id).exists() or
+            match.target_team.members.filter(id=user.id).exists() or
+            user in [match.requesting_team.captain, match.target_team.captain]
+        )
 
 class MatchJoinApprovalView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -366,118 +427,3 @@ class DirectMatchRequestListView(APIView):
 
         serializer = MatchRequestSerializer(direct_requests, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-
-class UserInvitationsView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        invitations = MatchInvitation.objects.filter(
-            user=request.user
-        ).select_related(
-            'match',
-            'match__requesting_team',
-            'match__target_team'
-        ).order_by('-created_at')
-        
-        serializer = MatchInvitationSerializer(invitations, many=True)
-        
-        return Response({
-            'count': invitations.count(),
-            'pending_count': invitations.filter(status='pending').count(),
-            'invitations': serializer.data
-        })
-
-
-class MatchInvitationResponseView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, invitation_id):
-        """
-        Handle invitation response (accept/reject)
-        Example POST body: {"action": "accept"} or {"action": "reject"}
-        """
-        try:
-            invitation = MatchInvitation.objects.get(
-                id=invitation_id,
-                user=request.user  # Ensure user can only respond to their own invitations
-            )
-        except MatchInvitation.DoesNotExist:
-            return Response(
-                {'error': 'Invitation not found or you are not authorized.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        action = request.data.get('action', '').lower()
-        
-        if action not in ['accept', 'reject']:
-            return Response(
-                {'error': 'Invalid action. Must be "accept" or "reject".'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if invitation.status != 'pending':
-            return Response(
-                {'error': f'Invitation already {invitation.status}.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Process the response
-        if action == 'accept':
-            return self._handle_accept(invitation)
-        else:
-            return self._handle_reject(invitation)
-
-    def _handle_accept(self, invitation):
-        match = invitation.match
-        team_side = invitation.team_side
-
-        # Update invitation status
-        invitation.status = 'accepted'
-        invitation.save()
-
-        # Update match player counts
-        if team_side == 'requesting':
-            match.requesting_confirmed_players += 1
-            # Update status if requirements are met
-            if match.requesting_confirmed_players >= match.requesting_required_players:
-                match.requesting_status = 'complete'
-        else:
-            match.target_confirmed_players += 1
-            if match.target_confirmed_players >= match.target_required_players:
-                match.target_status = 'complete'
-
-        match.save()
-
-        return Response(
-            {
-                'message': 'Invitation accepted successfully.',
-                'invitation': MatchInvitationSerializer(invitation).data,
-                'match_status': {
-                    'requesting': {
-                        'confirmed': match.requesting_confirmed_players,
-                        'required': match.requesting_required_players,
-                        'status': match.requesting_status
-                    },
-                    'target': {
-                        'confirmed': match.target_confirmed_players,
-                        'required': match.target_required_players,
-                        'status': match.target_status
-                    }
-                }
-            },
-            status=status.HTTP_200_OK
-        )
-
-    def _handle_reject(self, invitation):
-        invitation.status = 'rejected'
-        invitation.save()
-
-        return Response(
-            {
-                'message': 'Invitation rejected.',
-                'invitation': MatchInvitationSerializer(invitation).data
-            },
-            status=status.HTTP_200_OK
-        )

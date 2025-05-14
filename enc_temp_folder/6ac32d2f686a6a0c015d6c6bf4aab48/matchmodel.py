@@ -45,6 +45,12 @@ class MatchRequest(models.Model):
         ('accepted', 'Accepted'),
         ('rejected', 'Rejected'),
     ]
+    
+    TEAM_STATUS_CHOICES = [
+        ('incomplete', 'Incomplete'),
+        ('complete', 'Complete'),
+        ('full', 'Full')  # New status for when team reaches max capacity
+    ]
 
     open_match = models.ForeignKey(
         OpenMatch,
@@ -83,15 +89,73 @@ class MatchRequest(models.Model):
     message = models.TextField(blank=True, null=True)
     requested_at = models.DateTimeField(auto_now_add=True)
 
-    # ✅ NEW FIELDS FOR PLAYER TRACKING
-    requesting_required_players = models.IntegerField(default=0)
-    target_required_players = models.IntegerField(default=0)
+    # Player tracking fields
+    requesting_required_players = models.PositiveIntegerField(default=0)
+    target_required_players = models.PositiveIntegerField(default=0)
 
-    requesting_confirmed_players = models.IntegerField(default=0)
-    target_confirmed_players = models.IntegerField(default=0)
+    requesting_confirmed_players = models.PositiveIntegerField(default=0)
+    target_confirmed_players = models.PositiveIntegerField(default=0)
 
-    requesting_status = models.CharField(max_length=20, default='incomplete')  # 'complete' or 'incomplete'
-    target_status = models.CharField(max_length=20, default='incomplete')
+    # Substitution slots (default 3 slots per team)
+    requesting_substitution_slots = models.PositiveIntegerField(default=3)
+    target_substitution_slots = models.PositiveIntegerField(default=3)
+    
+    requesting_substitution_filled = models.PositiveIntegerField(default=0)
+    target_substitution_filled = models.PositiveIntegerField(default=0)
+
+    # Team status fields
+    requesting_status = models.CharField(
+        max_length=20, 
+        choices=TEAM_STATUS_CHOICES, 
+        default='incomplete'
+    )
+    target_status = models.CharField(
+        max_length=20, 
+        choices=TEAM_STATUS_CHOICES, 
+        default='incomplete'
+    )
+
+    # Computed properties
+    @property
+    def requesting_max_capacity(self):
+        return self.requesting_required_players + self.requesting_substitution_slots
+        
+    @property
+    def target_max_capacity(self):
+        return self.target_required_players + self.target_substitution_slots
+        
+    @property
+    def requesting_available_slots(self):
+        regular_needed = max(self.requesting_required_players - self.requesting_confirmed_players, 0)
+        if regular_needed > 0:
+            return regular_needed
+        return max(self.requesting_substitution_slots - self.requesting_substitution_filled, 0)
+        
+    @property
+    def target_available_slots(self):
+        regular_needed = max(self.target_required_players - self.target_confirmed_players, 0)
+        if regular_needed > 0:
+            return regular_needed
+        return max(self.target_substitution_slots - self.target_substitution_filled, 0)
+
+    def update_team_statuses(self):
+        # Update requesting team status
+        if self.requesting_confirmed_players >= self.requesting_max_capacity:
+            self.requesting_status = 'full'
+        elif self.requesting_confirmed_players >= self.requesting_required_players:
+            self.requesting_status = 'complete'
+        else:
+            self.requesting_status = 'incomplete'
+            
+        # Update target team status
+        if self.target_confirmed_players >= self.target_max_capacity:
+            self.target_status = 'full'
+        elif self.target_confirmed_players >= self.target_required_players:
+            self.target_status = 'complete'
+        else:
+            self.target_status = 'incomplete'
+            
+        self.save()
 
     def __str__(self):
         if self.open_match:
